@@ -1,0 +1,20 @@
+{
+  "name": "knapp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.13.4",
+    "lame": "^1.2.3",
+    "request": "^2.72.0",
+    "serialport": "^3.1.2-beta1",
+    "socket.io": "^1.4.6",
+    "soundcloud-nodejs-api-wrapper": "^0.3.2",
+    "speaker": "^0.3.0"
+  }
+}
