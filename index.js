@@ -1,34 +1,31 @@
-var express = require('express');
+var app = require('express')();
+var server = require('http').Server(app);
+var io = require('socket.io')(server);
+
 var player = require('./player');
 var config = require('./config');
+var socket;
 
-var app = express();
+io.on('connection', function (socket) {
+  function whatSong(type) {
+    return function(serial) {
+      socket.emit(type, config.songs[serial])
+    }
+  }
 
-function whatSong(song) {
-  console.log('what song');
-  console.log(song);
-  io.sockets.emit('')
-}
+  player.on('start', whatSong('start'));
+  player.on('stop', whatSong('stop'));
 
-function onSongStart(serial) {
-  var obj = config.songs[serial];
-  io.sockets.emit('start', obj);
-}
+});
 
-function onSongStop(serial) {
-  io.sockets.emit('stop');
-}
 
-player.load(config.songs)
-player.on('start', onSongStart)
-player.on('stop', onSongStop)
+player.load(config.songs);
+
 
 app.get('/', function (req, res) {
-  res.send('Hello World!');
+  res.sendfile(__dirname + '/index.html');
 });
 
-var server = app.listen(3000, function () {
+server.listen(3000, function () {
   console.log('Example app listening on port 3000!');
 });
-
-var io = require('socket.io')(server);

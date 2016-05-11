@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 
-var serialport = require("serialport")
+var serialport = require('serialport')
 var parsers = serialport.parsers;
-var baud = 9600;
-var prev;
+var baud = 2400;
 
 var listeners = [];
-
 function callListener(data) {
   return function(obj) {
     return obj.cb(data)
+  }
+}
+
+function handleType(type) {
+  return function(d) {
+    return type === d.type
   }
 }
 
@@ -22,43 +26,44 @@ var findPort = function (cb) {
     }).map(function (val) {
       return val.comName;
     });
-
     if (!ports.length) {
       console.error("Board", "No USB devices detected");
-      process.exit(3);
+      // process.exit(3);
       return;
     }
-
-    // Continue with connection routine attempts
-    console.info(
-      "Serial",
-      "Found port", ports[2]
-    );
-    cb(null, ports[2]);
+    cb(null, ports[1]);
   });
 
 };
+
+var timeout;
+var prev;
+function handleData(data) {
+  if (!data || data.length <= 0) {
+    return;
+  };
+  if (timeout) clearTimeout(timeout);
+  timeout = setTimeout(function () {
+      prev = undefined;
+      listeners.filter(handleType('stop')).forEach(callListener(undefined))
+  }, 2000);
+  if (data === prev) {
+    return;
+  };
+  prev = data;
+  listeners.filter(handleType('start')).forEach(callListener(data.trim()))
+}
 
 openPort = function (err, port_name) {
 
   var openOptions = {
     baudRate: baud,
-    parser: parsers.readline('\r\n')
+    parser: parsers.readline()
 
   };
 
-  var timeout;
-  var port = new serialport.SerialPort(port_name, openOptions);
-  port.on("data", function (data) {
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(function () {
-        prev = undefined;
-        listeners.filter(function(d) {return 'stop' === d.type}).forEach(callListener(undefined))
-    }, 1000);
-    if (data === prev) return;
-    prev = data;
-    listeners.filter(function(d) {return 'start' === d.type}).forEach(callListener(data))
-  });
+  var port = new serialport.SerialPort(port_name, openOptions)
+  .on("data", handleData);
 };
 
 findPort(openPort);

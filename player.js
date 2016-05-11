@@ -1,17 +1,20 @@
+'use strict';
+
 var reader = require('./reader');
 var lame = require('lame');
 var Speaker = require('speaker');
 var request = require('request')
 
 var listeners = [];
+var clientId = 'bc29a65541a777d6d9f0f517a9cbb7e6';
 
 var audioOptions = {channels: 2, bitDepth: 16, sampleRate: 44100};
-// Create Decoder and Speaker
-var decoder;
-var speaker;
+var songs;
 
-var inputStream;
-var currentSerial;
+var stream;
+var decoer;
+var speaker;
+var done;
 
 function findType(type) {
   return function(obj) {
@@ -21,62 +24,70 @@ function findType(type) {
 
 function callListener(data) {
   return function(obj) {
-    console.log(obj);
-    console.log(data);
     return obj.cb(data)
   }
 }
-
 
 // My Playlist
 function importSongs(s) {
   songs = s
 }
 
-function loadSong(serial) {
-  return (songs && songs[serial]) ? songs[serial].song : undefined;
+function load(serial, type) {
+  return (songs && songs[serial]) ? songs[serial][type] : undefined;
+}
+
+function loadSongs(type, id) {
+  return new Promise(function(resolve, reject) {
+    request.get(`http://api.soundcloud.com/${type}/${id}?client_id=${clientId}`, function(err, response, body) {
+      if (!err && response.statusCode == 200) {
+        var info = JSON.parse(body);
+        var streams = type ==='tracks' ? [info.stream_url] : info.tracks.map((track) => track.stream_url)
+        resolve(streams, info);
+      }
+    })
+  })
 }
 
 function stopSong() {
-  var lastPlayed = currentSerial
-  currentSerial = '';
-  if (!speaker || !decoder) return
-  speaker.end();
-  decoder.unpipe();
-  console.log('stop playing');
-  listeners.filter(findType('stop')).forEach(callListener(lastPlayed))
-}
-
-function checkSerial(serial) {
+  if (stream) {
+    stream.end();
+    done = true;
+    console.log('stoping track');
+  }
 
 }
 
-// Recursive function that plays song with index 'i'.
-function playSong(serial) {
-  currentSerial = serial;
-  var song = loadSong(serial);
+function playSong(songs, obj) {
+  var tracks = songs;
+  function next() {
+    var track = tracks.shift();
+    if (!track || done) return;
+    console.log(`playing track: ${track}`)
+    stream = request(`${track}?client_id=${clientId}`)
+    .on('error', function (err) {
+      console.error(err.stack || err);
+      next();
+    })
+    .pipe(new lame.Decoder())
+    .pipe(new Speaker(audioOptions))
+    .on('finish', next);
+  }
 
-  if (!song) return
-  // Read the first file
-   var stream = request(song)
-  // Lame decoder & speaker objects
-  decoder = new lame.Decoder();
-  speaker = new Speaker(audioOptions)
-
-  // pipe() returns destination stream
-  var spkr = decoder.pipe(speaker);
-  listeners.filter(findType('start')).forEach(callListener(currentSerial))
-  // Pipe the read data into the decoder and then out to the speakers
-  stream.on('error', function(err) {
-    console.log(err)
-  })
-  stream.on('data', function (chunk) {
-      decoder.write(chunk);
-  });
-
+  next()
 }
+
+function start(serial) {
+  var type = load(serial, 'type');
+  var id = load(serial, 'id');
+  loadSongs(type, id).then(playSong)
+}
+
 reader.on('stop', stopSong)
-reader.on('start', playSong)
+reader.on('start', function(serial) {
+  done = false;
+  start(serial)
+})
 // Start with the first song.
 module.exports = {
   load: importSongs,
